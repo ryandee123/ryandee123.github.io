@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<title>Add Demo tests</title>
+<style>
+	body { background-color: white }
+	H2 {font-family: Arial; color: #333333;}
+	p {font-family: Arial}
+	div {font-family: Arial; border-style: dashed; border: solid 1px; margin-right: 50%; margin-top: 20px; padding: 10px};
+}
+</style>
+</head>
+
+<body>
+<img src="https://io.catchpoint.com/auth/images/catchpoint-logo-black.png">
+<h2>Add tests via API</h2>
+<p>This triggers API requests to set up a Folder, containing Web, Traceroute, and DNS tests to a domain.
+<form>
+
+<div>API Credentials:<br><input placeholder="Key" type="text" id="key" value=""> <input placeholder="Secret" type="text" id="secret" value="">
+<p>Client name:<br><input placeholder="folder name" type="text" id="name" value="">
+<p>Domain: (no https)<br><input placeholder="www.domain.com" type="text" id="url" value="">
+<p><button type="button" onclick="fireAjax()">&nbsp;Run&nbsp;</button>
+</div>
+</form>
+<p><div id="out"></div>
+
+
+<script>
+var token = null;
+var folderID = null;
+var timestamp = new Date().toISOString();
+var name = null;
+var url = null;
+
+
+// ########## start ##########
+
+function fireAjax() {
+	const xhr = new XMLHttpRequest();
+	xhr.onload = function() { //stuff in here happens later
+		var response = JSON.parse(this.responseText);
+		token = response.access_token;
+		var status = JSON.parse(this.status);
+		if (status == '200') {
+			document.getElementById('out').innerHTML = `Token: ${token.substring(0,10)}...`;
+		} else {
+			document.getElementById('out').innerHTML = `<font color=red>Token error: ${status} - ${response.Message}</font>`;
+			return;
+		}
+		newFolder(); //chain to the next function
+	} 	
+	xhr.open("POST", "https://io.catchpoint.com/ui/api/token", true);	
+	xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+	xhr.setRequestHeader("Accept", "application/json");
+	xhr.send("grant_type=client_credentials&client_id=" + document.getElementById('key').value + "&client_secret=" + document.getElementById('secret').value);
+}
+
+
+// ########## new Folder ##########
+
+function newFolder() {
+	name = document.getElementById('name').value;
+
+	let json = {
+	"id": 0, 
+	"name": name,
+	"division_id": 4417,
+	"product_id": 18129,	
+	"alert_section": {
+    	"inheritance_type": {
+      		"id": 0,
+      		"name": "Inherit"
+    	}
+  	},
+  	"change_date": timestamp};
+	
+	const xhr = new XMLHttpRequest();
+	xhr.onload = function() {
+		var response = JSON.parse(this.responseText);
+		folderID = response.id;
+		if (JSON.parse(this.status) == '200') {
+			document.getElementById('out').innerHTML += `<p>FolderID: "${name}" - ${response.status} (<a href="https://portal.catchpoint.com/ui/Preview/ControlCenter/Synthetic/Folder/${folderID}">${folderID}</a>)`;
+		} else {
+			document.getElementById('out').innerHTML += `<p><font color=red>Folder error: ${status} - ${response.Message}</font>`;
+			return;
+		}
+		newWebTest(); //chain to the next function
+	} 	
+	xhr.open("POST", "https://io.catchpoint.com/ui/api/v1/folders/0", true);
+	xhr.setRequestHeader("Content-type", "application/json");
+	xhr.setRequestHeader("authorization", "Bearer " + token);
+	xhr.send(JSON.stringify(json));
+}
+
+
+// ########## new Web Test ##########
+
+function newWebTest() {
+	url = document.getElementById('url').value;
+	var webName = name + " - Chrome";
+	var webUrl = "https://" + url;
+
+	let json = {
+	  "id": 0,
+	  "name": webName,
+	  "test_type": {
+		"id": 0,
+		"name": "Web"},
+	  "division_id": 4417,
+	  "product_id": 18129,
+		"parent_folder_id": folderID,
+		"status": {
+		"id": 0,
+		"name": "Active"},
+	  "start": timestamp,
+	  "monitor_version": {
+		"version_type": {
+		  "id": 1,
+		  "name": "Stable"},
+		"major_version_number": 75},
+	  "monitor": {
+		"id": 18,
+		"name": "Chrome"},
+	  "http_method": {
+		"id": 0,
+		"name": "Get"},
+	  "enable_data_push_api": true,
+	  "test_url": webUrl,
+	  "alert_section": {
+    	"inheritance_type": {
+      		"id": 0,
+      		"name": "Inherit"
+          }
+    	},
+	  "change_date": timestamp}
+	   
+	const xhr = new XMLHttpRequest();
+	xhr.onload = function() {
+		var response = JSON.parse(this.responseText);
+		if (JSON.parse(this.status) == '200') {
+			document.getElementById('out').innerHTML += `<p>Web Test: "${webName}" - ${response.status} (${response.id})`;
+		} else {
+			document.getElementById('out').innerHTML += `<p><font color=red>Web Test error: "${response.Message}"</font>`;
+			return;
+		}
+		newTraceroute();
+	} 	
+	xhr.open("POST", "https://io.catchpoint.com/ui/api/v1/tests/0", true);
+	xhr.setRequestHeader("Content-type", "application/json");
+	xhr.setRequestHeader("authorization", "Bearer " + token);
+	xhr.send(JSON.stringify(json));
+
+	
+}
+
+// ########## Traceroute Test ##########
+
+function newTraceroute() {
+	var TraceName = name + " - Traceroute";
+
+	let json = {
+	  "id": 0,
+	  "name": TraceName,
+	  "test_type": {
+		"id": 12,
+		"name": "Trace Route"},
+	  "division_id": 4417,
+	  "product_id": 18129,
+	  "parent_folder_id": folderID,
+	  "status": {
+		"id": 0,
+		"name": "Active"},
+	  "start": timestamp,
+	  "monitor": {
+		"id": 29,
+		"name": "Trace Route TCP"},
+	  "test_location": url,
+	  "alert_section": {
+    	"inheritance_type": {
+      		"id": 0,
+      		"name": "Inherit"
+    	}
+  	  },
+	  "change_date": timestamp
+	}
+
+	const xhr = new XMLHttpRequest();
+	xhr.open("POST", "https://io.catchpoint.com/ui/api/v1/tests/0", true);
+	xhr.setRequestHeader("Content-type", "application/json");
+	xhr.setRequestHeader("authorization", "Bearer " + token);
+	xhr.send(JSON.stringify(json));
+	xhr.onload = function() {
+		var response = JSON.parse(this.responseText);
+		if (JSON.parse(this.status) == '200') {
+			document.getElementById('out').innerHTML += `<p>Traceroute: "${TraceName}" - ${response.status} (${response.id})`;
+		} else {
+			document.getElementById('out').innerHTML += `<p><font color=red>Traceroute error: "${response.Message}"</font>`;
+			return;
+		}
+		newDNS();
+	} 	
+
+}
+
+
+// ########## DNS Test ##########
+
+function newDNS() {
+	var DNSName = name + " - DNS Exp";
+
+	let json = {
+	  "id": 0,
+	  "name": DNSName,
+	  "test_type": {
+		"id": 5,
+		"name": "DNS"},
+	  "division_id": 4417,
+	  "product_id": 18129,
+	  "parent_folder_id": folderID,
+	  "status": {
+		"id": 0,
+		"name": "Active"},
+	  "start": timestamp,
+	  "monitor": {
+		"id": 12,
+		"name": "Experience"},
+	  "dns_query_type": {
+		"id": 1,
+		"name": "A"},
+	  "test_domain": url,
+	  "protocol": {
+		"id": 2,
+		"name": "Udp"},
+	  "alert_section": {
+    	"inheritance_type": {
+      		"id": 0,
+      		"name": "Inherit"
+    	}
+  	  },
+	  "change_date": timestamp
+	}
+	
+	const xhr = new XMLHttpRequest();
+	xhr.onload = function() {
+		var response = JSON.parse(this.responseText);
+		if (JSON.parse(this.status) == '200') {
+			document.getElementById('out').innerHTML += `<p>DNS Exp: "${DNSName}" - ${response.status} (${response.id})`;
+		} else {
+			document.getElementById('out').innerHTML += `<p><font color=red>DNS error: "${response.Message}"</font>`;
+			return;
+		}
+	} 	
+	xhr.open("POST", "https://io.catchpoint.com/ui/api/v1/tests/0", true);
+	xhr.setRequestHeader("Content-type", "application/json");
+	xhr.setRequestHeader("authorization", "Bearer " + token);
+	xhr.send(JSON.stringify(json));
+}
+
+
+</script>
+
+</body>
+</html>
